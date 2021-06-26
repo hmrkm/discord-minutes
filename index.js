@@ -23,7 +23,7 @@ client.on('ready', () => {
     console.log('I am ready!');
 });
 
-const prefixText = process.enc.TEXT_PREFIX;
+const prefixText = process.env.TEXT_PREFIX.replaceAll("\\n", "\n");
 
 let text = prefixText;
 

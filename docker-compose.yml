@@ -1,0 +1,20 @@
+version: "3"
+
+volumes:
+  discord-node_modules:
+
+services:
+  discord:
+    build: .
+    tty: true
+    volumes:
+      - ./:/workspace
+      - discord-node_modules:/workspace/node_modules
+    working_dir: /workspace
+    environment:
+      - DICORD_BOT_TOKEN=${DICORD_BOT_TOKEN}
+      - PREFIX=${PREFIX}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS}
+      - SLACK_TOKEN=${SLACK_TOKEN}
+      - TARGET_CHANNEL=${TARGET_CHANNEL}
+      - TEXT_PREFIX=${TEXT_PREFIX}

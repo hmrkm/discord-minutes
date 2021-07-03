@@ -34,7 +34,13 @@ const enter = (channelId) => {
         return console.error("The channel does not exist!");
     }
 
-    text = prefixText;
+    let paretnTs;
+    slackClient.chat.postMessage({
+        text: prefixText,
+        channel: process.env.TARGET_CHANNEL,
+    }).then(result => {
+        parentTs = result.ts;
+    });
 
     channel.join()
         .then(conn => {
@@ -53,7 +59,11 @@ const enter = (channelId) => {
                             if (data.error === null) {
                                 const speach = `${user.username} : ${data.results[0].alternatives[0].transcript}`;
                                 console.log(speach);
-                                text += speach + "\n"
+                                slackClient.chat.postMessage({
+                                    text: speach,
+                                    channel: process.env.TARGET_CHANNEL,
+                                    thread_ts: parentTs,
+                                });
                             }
                         });
                     audioStream.pipe(recognizeStream);
@@ -69,12 +79,6 @@ const enter = (channelId) => {
 }
 
 const exit = (channelId) => {
-
-    slackClient.chat.postMessage({
-        text: text,
-        channel: process.env.TARGET_CHANNEL,
-    });
-
     const channel = client.channels.cache.get(channelId);
     if (!channel) {
         return console.error("The channel does not exist!");

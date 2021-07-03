@@ -6,7 +6,9 @@ const speechClient = new speech.v1p1beta1.SpeechClient();
 const { WebClient } = require('@slack/web-api');
 const slackClient = new WebClient(process.env.SLACK_TOKEN);
 
-const prefix = process.env.PREFIX;
+const channelId = process.env.CHANNEL_ID
+const prefixText = process.env.TEXT_PREFIX.replaceAll("\\n", "\n");
+const audioDir = __dirname + "/recordings/"
 
 const SAMPLE_RATE = 48000;
 const stt_request = {
@@ -21,39 +23,23 @@ client.login(process.env.DICORD_BOT_TOKEN);
 
 client.on('ready', () => {
     console.log('I am ready!');
+    enter(channelId);
 });
 
-const prefixText = process.env.TEXT_PREFIX.replaceAll("\\n", "\n");
+let text;
 
-let text = prefixText;
-
-client.on('message', msg => {
-    if (msg.content.startsWith(prefix)) {
-        const commandBody = msg.content.substring(prefix.length).split(' ');
-        const channelName = commandBody[1];
-
-        if (commandBody[0] === ('enter') && commandBody[1]) enter(msg, channelName);
-        if (commandBody[0] === ('exit')) exit(msg);
+const enter = (channelId) => {
+    const channel = client.channels.cache.get(channelId);
+    if (!channel) {
+        return console.error("The channel does not exist!");
     }
-});
 
-const enter = (msg, channelName) => {
-    channelName = channelName.toLowerCase();
+    text = prefixText;
 
-    //filter out all channels that aren't voice or stage
-    const voiceChannel = msg.guild.channels.cache
-        .filter(c => c.type === "voice" || c.type === "stage")
-        .find(channel => channel.name.toLowerCase() === channelName);
-
-    //if there is no voice channel at all or the channel is not voice or stage
-    if (!voiceChannel || (voiceChannel.type !== 'voice' && voiceChannel.type !== 'stage'))
-        return msg.reply(`The channel #${channelName} doesn't exist or isn't a voice channel.`);
-
-    console.log(`Sliding into ${voiceChannel.name} ...`);
-    voiceChannel.join()
+    channel.join()
         .then(conn => {
 
-            console.log(`Joined ${voiceChannel.name}!\n\nREADY TO RECORD\n`);
+            console.log(`Joined ${channel.name}!\n\nREADY TO RECORD\n`);
 
             const receiver = conn.receiver;
             conn.on('speaking', (user, speaking) => {
@@ -71,40 +57,48 @@ const enter = (msg, channelName) => {
                             }
                         });
                     audioStream.pipe(recognizeStream);
-                    // audioStream.pipe(createNewChunk());
+                    // audioStream.pipe(createNewChunk(user.id));
 
                     audioStream.on('end', () => { console.log(`${user.username} stopped speaking`); });
                 }
             });
         })
-        .catch(err => { throw err; });
-};
+        .catch(err => {
+            console.log(err);
+        });
+}
 
-const exit = (msg) => {
-    //check to see if the voice cache has any connections and if there is
-    //no ongoing connection (there shouldn't be undef issues with this).
-    if (msg.guild.voiceStates.cache.filter(a => a.connection !== null).size !== 1)
-        return;
+const exit = (channelId) => {
 
     slackClient.chat.postMessage({
         text: text,
         channel: process.env.TARGET_CHANNEL,
     });
-    console.log(text);
-    text = prefixText;
 
-    //make sure it's .last() not .first().  some discord js magic going on rn
-    const { channel: voiceChannel, connection: conn } = msg.guild.voiceStates.cache.last();
-    if (voiceChannel === null) {
-        console.log(msg.guild.voiceStates.cache);
-        console.log("voiceChannel is null");
-    } else {
-        voiceChannel.leave();
-        console.log(`\nSTOPPED RECORDING\n`);
+    const channel = client.channels.cache.get(channelId);
+    if (!channel) {
+        return console.error("The channel does not exist!");
     }
+
+    channel.leave();
+    console.log(`\nSTOPPED RECORDING\n`);
 };
 
-const createNewChunk = () => {
-    const pathToFile = __dirname + `/recordings/${Date.now()}.pcm`;
+const createNewChunk = (userId) => {
+    const pathToFile = audioDir + `${Date.now()}_${userId}.pcm`;
     return fs.createWriteStream(pathToFile);
 };
+
+
+var reader = require("readline").createInterface({
+    input: process.stdin,
+});
+
+reader.on("line", (line) => {
+    if (line === "enter") {
+        enter(channelId);
+    }
+    if (line === "exit") {
+        exit(channelId);
+    }
+});

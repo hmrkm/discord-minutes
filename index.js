@@ -26,15 +26,13 @@ client.on('ready', () => {
     enter(channelId);
 });
 
-let text;
-
 const enter = (channelId) => {
     const channel = client.channels.cache.get(channelId);
     if (!channel) {
         return console.error("The channel does not exist!");
     }
 
-    let paretnTs;
+    let parentTs;
     slackClient.chat.postMessage({
         text: prefixText,
         channel: process.env.TARGET_CHANNEL,
@@ -53,21 +51,8 @@ const enter = (channelId) => {
                     console.log(`${user.username} started speaking`);
                     const audioStream = receiver.createStream(user, { mode: 'pcm' });
 
-                    const recognizeStream = speechClient.streamingRecognize(stt_request)
-                        .on('error', console.error)
-                        .on('data', (data) => {
-                            if (data.error === null) {
-                                const speach = `${user.username} : ${data.results[0].alternatives[0].transcript}`;
-                                console.log(speach);
-                                slackClient.chat.postMessage({
-                                    text: speach,
-                                    channel: process.env.TARGET_CHANNEL,
-                                    thread_ts: parentTs,
-                                });
-                            }
-                        });
-                    audioStream.pipe(recognizeStream);
-                    // audioStream.pipe(createNewChunk(user.id));
+                    audioStream.pipe(recognizeStream(parentTs, user));
+                    audioStream.pipe(createNewChunk(user.id));
 
                     audioStream.on('end', () => { console.log(`${user.username} stopped speaking`); });
                 }
@@ -88,11 +73,27 @@ const exit = (channelId) => {
     console.log(`\nSTOPPED RECORDING\n`);
 };
 
+const recognizeStream = (parentTs, user) => {
+    return speechClient
+        .streamingRecognize(stt_request)
+        .on('error', console.error)
+        .on('data', (data) => {
+            if (data.error === null) {
+                const speech = `${user.username} : ${data.results[0].alternatives[0].transcript}`;
+                console.log(speech);
+                slackClient.chat.postMessage({
+                    text: speech,
+                    channel: process.env.TARGET_CHANNEL,
+                    thread_ts: parentTs,
+                });
+            }
+        });
+};
+
 const createNewChunk = (userId) => {
     const pathToFile = audioDir + `${Date.now()}_${userId}.pcm`;
     return fs.createWriteStream(pathToFile);
 };
-
 
 var reader = require("readline").createInterface({
     input: process.stdin,

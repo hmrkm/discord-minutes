@@ -51,10 +51,23 @@ const enter = (channelId) => {
                     console.log(`${user.username} started speaking`);
                     const audioStream = receiver.createStream(user, { mode: 'pcm' });
 
-                    audioStream.pipe(recognizeStream(parentTs, user));
-                    audioStream.pipe(createNewChunk(user.id));
+                    const now = Date.now();
 
-                    audioStream.on('end', () => { console.log(`${user.username} stopped speaking`); });
+                    const pathToPcmFile = audioDir + `${now}_${user.id}.pcm`
+                    const pathToTxtFile = audioDir + `${now}_${user.id}.txt`
+
+                    audioStream.pipe(recognizeStream(parentTs, user, pathToTxtFile));
+                    audioStream.pipe(createNewChunk(pathToPcmFile));
+
+                    audioStream.on('end', () => {
+                        console.log(`${user.username} stopped speaking`);
+                        // if (fs.existsSync(pathToPcmFile)) {
+                        //     console.log(pathToPcmFile + " is exist");
+                        // }
+                        // if (fs.existsSync(pathToTxtFile)) {
+                        //     console.log(pathToTxtFile + " is exist");
+                        // }
+                    });
                 }
             });
         })
@@ -73,7 +86,7 @@ const exit = (channelId) => {
     console.log(`\nSTOPPED RECORDING\n`);
 };
 
-const recognizeStream = (parentTs, user) => {
+const recognizeStream = (parentTs, user, pathToFile) => {
     return speechClient
         .streamingRecognize(stt_request)
         .on('error', console.error)
@@ -86,12 +99,17 @@ const recognizeStream = (parentTs, user) => {
                     channel: process.env.TARGET_CHANNEL,
                     thread_ts: parentTs,
                 });
+
+                try {
+                    fs.writeFileSync(pathToFile, speech);
+                } catch (e) {
+                    console.log(e);
+                }
             }
         });
 };
 
-const createNewChunk = (userId) => {
-    const pathToFile = audioDir + `${Date.now()}_${userId}.pcm`;
+const createNewChunk = (pathToFile) => {
     return fs.createWriteStream(pathToFile);
 };
 
